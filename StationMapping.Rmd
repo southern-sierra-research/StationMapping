@@ -1,0 +1,240 @@
+---
+title: "StationMapping"
+author: "Patrick D. lorch"
+date: "2022-09-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Rmotus package install
+
+Probably do not need to run again.
+
+```{r}
+install.packages("motus", 
+                 repos = c(birdscanada = 'https://birdscanada.r-universe.dev',
+                           CRAN = 'https://cloud.r-project.org'))
+
+# If individual package fail
+install.packages("crayon")
+install.packages("assertthat")
+install.packages("cpp11")
+install.packages("jsonlite")
+
+# If this still fails you can do this and rerun
+options(timeout = max(1000, getOption("timeout")))
+
+```
+
+## MotusRBook
+
+Based on examples in **Motus R Book**
+by Tara L. Crewe, Zoe Crysler, and Philip Taylor
+https://beta.motus.org/MotusRBook/
+
+
+```{r setup}
+library(motus)
+library(lubridate)
+library(dplyr)
+Sys.setenv(TZ = "UTC")
+
+# If you need a project file, and an update run this.
+
+proj.458.sql.motus <- tagme(projRecv = 458, new = TRUE, update = TRUE) # CA shorebirds
+proj.247.sql.motus <- tagme(projRecv = 247, new = TRUE, update = TRUE) # SSRS
+
+# If you just want to link to an existing project database and use the metadf.recvDeps from last download, use this.
+
+proj.458.sql.motus <- tagme(projRecv = 458, 
+                            dir = "C:/Users/PatrickLorch/OneDrive - SSRS/MotusGeneral/rmotus_work/Motus-work", 
+                            new = FALSE, 
+                            update = FALSE)
+proj.247.sql.motus <- tagme(projRecv = 247, 
+                            dir = "C:/Users/PatrickLorch/OneDrive - SSRS/MotusGeneral/rmotus_work/Motus-work", 
+                            new = FALSE, 
+                            update = FALSE)
+
+# Receivers
+
+# This will get df.recvDeps on all projects and receiver deployments
+## Access this in recDeps table in proj.projnum.sql.motus
+metadata(proj.458.sql.motus, projectIDs = 458)
+
+
+motusLogout()
+```
+
+## Motus R book map example
+
+I have struggled to get this example to work.  It requires lots of tweaking.
+I am implementing a leaflet map instead below.
+
+```{r data}
+library(sf)
+library(rnaturalearth)
+library(ggplot2)
+
+# get receiver metadata
+tbl.458.recvDeps <- tbl(proj.458.sql.motus, "recvDeps")
+df.458.recvDeps <- tbl.458.recvDeps %>% 
+  collect() %>% 
+  mutate(timeStart = as_datetime(tsStart),
+         timeEnd = as_datetime(tsEnd),
+         # for deployments with no end dates, make an end date a year from now
+         timeEnd = if_else(is.na(timeEnd), Sys.time() + years(1), timeEnd))
+
+tbl.247.recvDeps <- tbl(proj.247.sql.motus, "recvDeps")
+df.247.recvDeps <- tbl.247.recvDeps %>% 
+  collect() %>% 
+  mutate(timeStart = as_datetime(tsStart),
+         timeEnd = as_datetime(tsEnd),
+         # for deployments with no end dates, make an end date a year from now
+         timeEnd = if_else(is.na(timeEnd), Sys.time() + years(1), timeEnd))
+
+# get running intervals for all receiver deployments
+siteOp.458 <- with(df.458.recvDeps, interval(timeStart, timeEnd))
+siteOp.247 <- with(df.247.recvDeps, interval(timeStart, timeEnd))
+
+# set the date range you're interested in
+dateRange <- interval(as_date("2014-01-01"), as_date("2017-12-31"))
+
+# create new variable "active" which will be set to TRUE if the receiver was
+# active at some point during your specified date range, and FALSE if not
+df.458.recvDeps$active <- int_overlaps(siteOp.458, dateRange) 
+df.247.recvDeps$active <- int_overlaps(siteOp.247, dateRange) 
+
+# create map with receivers active during specified date range as red, and
+# receivers with detections as yellow
+
+# Run one of these to use in map
+df.recvDeps = df.458.recvDeps
+df.recvDeps = df.247.recvDeps
+```
+
+## Create Leaflet map with slider
+
+From here: https://rdrr.io/cran/leaflet.extras2/man/addTimeslider.html
+
+```{r leaflet}
+# install.packages("leaflet.extras2", "geojsonsf")
+library(leaflet)
+library(leaflet.extras2)
+library(sf)
+library(geojsonsf)
+
+# eliminate stations with no Lat, Long.
+data = df.recvDeps[-which(is.na(df.recvDeps$latitude)),]
+# eliminate station with no timeStart
+data = data[-which(is.na(data$timeStart)),]
+
+projcrs <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
+
+sf.recvDeps <- sf::st_as_sf(data,
+                            coords = c("longitude", "latitude"),
+                            crs = projcrs)
+sf.recvDeps <- st_cast(sf.recvDeps, "POINT")
+sf.recvDeps$time = sf.recvDeps$timeStart
+
+# color palette
+pal <- colorFactor(c("gray", "red", "white"), 
+                   levels = c("terminated", "active", "pending"))
+
+leaflet() %>%
+  addTiles(group = "OSM (default)") %>%
+  # addProviderTiles('Esri.WorldImagery',group = "Esri World Imagery") %>%
+  addTimeslider(data = sf.recvDeps,
+                color = pal(sf.recvDeps$status),
+                popup = ~paste0(name, ";  ", fixtureType),
+             options = timesliderOptions(
+               position = "topright",
+               timeAttribute = "time",
+               alwaysShowDate = TRUE,
+               range = TRUE)) %>%
+  addLegend("bottomleft", pal = pal, values = sf.recvDeps$status,
+                title = "Motus stations <br> (data: motus.org)",
+                opacity = 0.5,
+                bins = 3) %>%
+  setView(-119, 37, 5)
+
+```
+
+## Example using Leaflet and shiny
+
+I found this first then found a leaflet.extras2 slider
+
+This comes from here:
+https://blogs.unimelb.edu.au/researcher-library/2020/06/19/making-a-covid-19-map-in-r-using-shiny-and-leaflet/
+
+I never finished setting this up.
+
+```{r rshinyleaflet}
+# install and load necessary libraries
+# install.packages(c(tidyverse", "shiny", "leaflet", "RColorBrewer"))
+library(tidyverse)
+library(shiny)
+library(leaflet)
+library(RColorBrewer)
+
+# color palette
+pal <- colorFactor(c("gray", "red", "white"), 
+                   domain = c("terminated", "active", "pending"))
+
+# specify shiny user interface and time slider
+ui <- bootstrapPage(tags$style(type = "text/css", 
+                               "html, body, .leaflet {width:100%; height:100%}"),
+                    leafletOutput("map", width = "100%", height = "100%"),
+                    # position and properties of the time slider
+                    absolutePanel(bottom = 10, right = 300, draggable = TRUE,
+                                  # slider title, step increments, and ticks
+                                  sliderInput("integer", "Date range:",ticks = FALSE, 
+                                              min = min(df.recvDeps$timeStart), 
+                                              max = ~max(df.recvDeps$timeEnd), 
+                                              value = 1:30, step = 1,
+                                              animate = animationOptions(interval = 1000, 
+                                                                         loop = TRUE))))
+
+# shiny server input/output
+server <- function(input, output, session) {
+  filtereddf.recvDeps <- reactive({
+    df.recvDeps %>%
+      filter(day >= input$integer[1] & day <= input$integer[2])
+  })
+  output$map <- renderLeaflet({
+    leaflet(df.recvDeps) %>%
+      addTiles(group = "OSM (default)") %>%
+      addProviderTiles('Esri.WorldImagery',group = "Esri World Imagery") %>%
+      # set boundaries for map
+      fitBounds(lng1 = min(df.recvDeps$longitude), 
+                lat1 = min(df.recvDeps$latitude), 
+                lng2 = max(df.recvDeps$longitude), 
+                lat2 = max(df.recvDeps$latitude)) %>%
+      # add legend for the map
+      addLegend("bottomleft", pal = pal, values = ~status,
+                title = "Motus stations <br> (data: motus.org)",
+                opacity = 0.5,
+                bins = 4)
+  })
+  observe({
+    leafletProxy("map", df.recvDeps = filteredData()) %>%
+      clearMarkers() %>%
+      addCircleMarkers(lng = ~longitude,
+                       lat = ~latitude,
+                       # radius = ~log(value) * 3.5,
+                       weight = 1,
+                       opacity = 10,
+                       color = pal(status),
+                       popup = ~paste0(name; ",  ", fixtureType),
+                       clusterOptions = markerClusterOptions()) %>%
+      addLayersControl(
+        baseGroups = c("OSM (default)", "Esri World Imagery"),
+        options = layersControlOptions(collapsed = TRUE))
+
+  }) 
+}
+
+```
+
