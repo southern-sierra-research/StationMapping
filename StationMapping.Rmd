@@ -145,7 +145,7 @@ pal <- colorFactor(c("gray", "red", "white"),
 
 leaflet() %>%
   addTiles(group = "OSM (default)") %>%
-  # addProviderTiles('Esri.WorldImagery',group = "Esri World Imagery") %>%
+  addProviderTiles('Esri.WorldImagery',group = "Esri World Imagery") %>%
   addTimeslider(data = sf.recvDeps,
                 color = pal(sf.recvDeps$status),
                 popup = ~paste0(name, ";  ", fixtureType),
@@ -158,6 +158,10 @@ leaflet() %>%
                 title = "Motus stations <br> (data: motus.org)",
                 opacity = 0.5,
                 bins = 3) %>%
+      addLayersControl(
+        baseGroups = c("OSM (default)", "Esri World Imagery"),
+        position = "bottomright",
+        options = layersControlOptions(collapsed = TRUE)) %>%
   setView(-119, 37, 5)
 
 ```
