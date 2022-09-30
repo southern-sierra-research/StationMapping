@@ -47,6 +47,16 @@ Sys.setenv(TZ = "UTC")
 proj.458.sql.motus <- tagme(projRecv = 458, new = TRUE, update = TRUE) # CA shorebirds
 proj.247.sql.motus <- tagme(projRecv = 247, new = TRUE, update = TRUE) # SSRS
 
+# If you need an updated project file, without activity, node data, or depricated batches data.
+
+proj.458.sql.motus <- tagme(projRecv = 458, new = TRUE, update = TRUE) # CA shorebirds
+proj.247.sql.motus <- tagme(projRecv = 247, 
+                            new = FALSE, 
+                            update = TRUE,
+                            skipActivity = T,
+                            skipNodes = T,
+                            skipDeprecated = T) # SSRS
+
 # If you just want to link to an existing project database and use the metadf.recvDeps from last download, use this.
 
 proj.458.sql.motus <- tagme(projRecv = 458, 
@@ -60,9 +70,10 @@ proj.247.sql.motus <- tagme(projRecv = 247,
 
 # Receivers
 
-# This will get df.recvDeps on all projects and receiver deployments
+# This will get data on all projects and receiver deployments
 ## Access this in recDeps table in proj.projnum.sql.motus
 metadata(proj.458.sql.motus, projectIDs = 458)
+metadata(proj.247.sql.motus, projectIDs = 247, delete = T)
 
 
 motusLogout()
