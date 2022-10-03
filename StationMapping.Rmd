@@ -57,12 +57,17 @@ proj.247.sql.motus <- tagme(projRecv = 247,
                             skipNodes = T,
                             skipDeprecated = T) # SSRS
 
-# If you just want to link to an existing project database and use the metadf.recvDeps from last download, use this.
+# If you just want to link to an existing project database and use the metadata from last download, use this.
 
 proj.458.sql.motus <- tagme(projRecv = 458, 
                             dir = "C:/Users/PatrickLorch/OneDrive - SSRS/MotusGeneral/rmotus_work/Motus-work", 
                             new = FALSE, 
                             update = FALSE)
+# Links to copy in mapping dir
+proj.458.sql.motus <- tagme(projRecv = 458,
+                            new = FALSE, 
+                            update = FALSE)
+
 proj.247.sql.motus <- tagme(projRecv = 247, 
                             dir = "C:/Users/PatrickLorch/OneDrive - SSRS/MotusGeneral/rmotus_work/Motus-work", 
                             new = FALSE, 
